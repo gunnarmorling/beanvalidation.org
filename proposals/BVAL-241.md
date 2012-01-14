@@ -239,6 +239,8 @@ The `getParameterName()` method returns the name of the parameter hosting the vi
 
 The `getKind()` method returns the `Kind` of the constraint violation, which can either be `Kind.CONSTRUCTOR_PARAMETER`, `Kind.METHOD_PARAMETER` or `Kind.RETURN_VALUE`.
 
+#### Examples
+
 ### Triggering validation
 
 It's important to understand that BV itself doesn't trigger the evaluation of any method level constraints. That is, just annotating any methods with parameter or return value constraints doesn't automatically enforce these constraints, just as annotating any fields or properties with bean constraints does enforce these either.
@@ -254,6 +256,59 @@ Instead method level constraints must be validated by invoking the appropriate m
 ## Extensions to the meta-data API
 
 ## Extensions to the XML schema for constraint mappings
+
+## MethodConstraintViolationException (to become 8.2)
+
+The method validation mechanism is typically not invoked manually during normal program execution, but rather automatically using a proxy, method interceptor or similar. Typically the program flow shouldn't continue its normal execution in case a parameter or return value constraint is violated which is realized by throwing an exception. 
+
+Bean Validation provides a reference exception for such cases. Frameworks and applications are encouraged to use `MethodConstraintViolationException` as opposed to a custom exception to increase consistency of the Java platform.
+
+	/**
+	 * Exception class to be thrown by integrators of the BV method validation feature.
+	 *
+	 * @author Gunnar Morling
+	 */
+	public class MethodConstraintViolationException extends ValidationException {
+	
+		private static final long serialVersionUID = 5694703022614920634L;
+		
+		private final Set<MethodConstraintViolation<?>> constraintViolations;
+		
+		/**
+		 * Creates a new {@link MethodConstraintViolationException}.
+		 *
+		 * @param constraintViolations A set of constraint violations for which this exception shall be created.
+		 */
+		public MethodConstraintViolationException(Set<? extends MethodConstraintViolation<?>> constraintViolations) {
+		
+			this( null, constraintViolations );
+		}
+		
+		/**
+		 * Creates a new {@link MethodConstraintViolationException}.
+		 *
+		 * @param message The message for the exception to be created.
+		 * @param constraintViolations A set of constraint violations for which this exception shall be created.
+		*/
+		public MethodConstraintViolationException(String message,
+			Set<? extends MethodConstraintViolation<?>> constraintViolations) {
+		
+			super( message );
+			this.constraintViolations = constraintViolations == null ? 
+				Collections.<MethodConstraintViolation<?>>emptySet() : 
+				Collections .unmodifiableSet( constraintViolations );
+		}
+		
+		/**
+		 * Returns the set of constraint violations reported during a validation.
+		 *
+		 * @return An unmodifiable set of {@link MethodConstraintViolation}s occurred during a method level validation call.
+		 */
+		public Set<MethodConstraintViolation<?>> getConstraintViolations() {
+			return constraintViolations;
+		}
+	
+	}
 
 ## Required changes in 1.0 wording
 
