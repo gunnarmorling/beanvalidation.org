@@ -251,7 +251,15 @@ Instead method level constraints must be validated by invoking the appropriate m
 * aspect-oriented programming
 * Java proxies
 
-#### Validating invariants
+#### Options
+
+From Emmanuel's mail:
+
+* reuse @Valid or have a new one
+* let each integrator use a specific annotation or propose a BV one
+* put it on the method validated (a global set of groups per method) or on a per parameter
+
+### Validating invariants
 
 ## Extensions to the meta-data API
 
