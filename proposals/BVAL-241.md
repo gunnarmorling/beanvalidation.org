@@ -217,6 +217,8 @@ The `getParameterName()` method returns the name of the parameter hosting the vi
 
 The `getKind()` method returns the `Kind` of the constraint violation, which can either be `Kind.CONSTRUCTOR_PARAMETER`, `Kind.METHOD_PARAMETER` or `Kind.RETURN_VALUE`.
 
+TODO: describe behavior of getPropertyPath() (and getRootBean()) as inherited from `ConstraintViolation`)
+
 #### Examples
 
 ### Triggering validation
