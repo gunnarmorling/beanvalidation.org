@@ -14,19 +14,17 @@ As proposed in BV 1.0 Appendix C, the notion of method validation shall be estab
 
 ## Defining method level constraints
 
+Note: In the following, the term "method level" constraint refers to constraints declared on methods as well as constructors.
+
 Method constraints are defined by ading constraint annotations to method or constructor parameters (parameter constraints) or methods (return value constraints). As with bean constraints, this can happen using either actual Java annotations or using an XML constraint mapping file (see ...). BV providers are free to provide additional means of defining method constraints such as an API-based aproach.
 
-It's vital to understand that specifying a method level constraint doesn't cause this constraint to be automatically validated upon invocation of that method. See ... for more details.
+### Requirements on methods to be validated
+
+Methods which shall be annotated with parameter or return value constraints must be non-static. There is no restriction with respect to the visibility of validated methods from the perspective of this specification, but it's possible that certain technologies integrating with method validation (see ...) support only the validation of methods with certain visibilities.
 
 ### Defining parameter constraints
-
+ 
 Parameter constraints are defined by simply annotating method or constructor parameters:
-
-#### Requirements on methods to be validated
-
-Methods or constructors which shall be annotated with parameter constraints must fullfil the following requirements:
-
-* non-static
 
 An example:
 
@@ -36,18 +34,40 @@ An example:
 			//...
 		}
 
-		public void placeOrder(@NotNull CustomerPK customerPK, @NotNull Item item, @Min(1) quantity) {
+		public void placeOrder(@NotNull @Size(min=3, max=20) String customerCode, @NotNull Item item, @Min(1) quantity) {
 			//...
 		}
 	}
 
+Here the following preconditions are defined which must be satisfied in order to legally invoke the methods of the `OrderService` class:
 
+* The `CreditCardProcessor` passed to the constructor must not be null.
+* The customer code passed to the `placeOrder()` method must not be null and must be between 3 and 20 characters long.
+* The `Item` passed to the `placeOrder()` method must not be null.
+* The quantity passed to the `placeOrder()` method must be 1 at least.
 
 Tip: In order to use constraint annotations for method parameters, their element type must be `ELEMENTTYPE.METHOD`. All built-in constraints support this element type and it's considered a best practice to do the same for custom constraints also if they are not primarily intended to be used as parameter constraints.
 
 #### Cross-parameter constraints
 
-### Defining return value constraint
+#### Naming parameters
+
+If the validation of a parameter constraint fails the concerned parameter needs to be identified in the resulting `MethodConstraintViolation` (see ...).
+
+Java doesn't provide a portable way to retrieve parameter names. Bean Validation therefore defines the `ParameterNameProvider` API to which the retrieval of parameter names is delegated:
+
+	public interface ParameterNameProvider {
+
+		String[] getParameterNames(Constructor< ? > constructor) throws ValidationException;
+
+		String[] getParameterNames(Method method) throws ValidationException;
+	}
+
+A conforming BV implementation provides a default `ParameterNameProvider` implementation which returns parameter names in the form `arg<PARAMETER_INDEX>`, where `PARAMETER_INDEX` starts at 0 for the first parameter, e.g. `arg0`, `arg1`etc.
+
+BV providers are free to provide additional implementations (e.g. based on annotations specifying parameter names, debug symbols etc.). If a user wishes to use another parameter name provider than the default implementation, she may specify the provider to use with help of the bootstrap API (see ...) or the XML configuration (see ...).
+
+### Defining return value constraints
 
 TODO: Should property constraints (on getter methods) also be handled as method constraint?
 
@@ -65,57 +85,6 @@ When defining method level constraints within inheritance hierarchies (that is, 
 #### Option 2: allow return value refinement (AND style)
 
 #### Option 3: allow param (OR style) and return value (AND style) refinement
-
-### Naming parameters
-
-If the validation of a parameter constraint fails the concerned parameter needs to be identified in the resulting `MethodConstraintViolation` (see ...).
-
-Java doesn't provide a portable way to retrieve parameter names. Bean Validation therefore defines the `ParameterNameProvider` API to which the retrieval of parameter names is delegated:
-
-	public interface ParameterNameProvider {
-
-		String[] getParameterNames(Constructor< ? > constructor) throws ValidationException;
-
-		String[] getParameterNames(Method method) throws ValidationException;
-	}
-
-A conforming BV implementation provides a default `ParameterNameProvider` implementation which returns parameter names in the form `arg<PARAMETER_INDEX>`, where `PARAMETER_INDEX` starts at 0 for the first parameter, e.g. `arg0`, `arg1`etc.
-
-BV providers are free to provide additional implementations (e.g. based on annotations specifying parameter names, debug symbols etc.). If a user wishes to use another parameter name provider than the default implementation, she may specify the provider to use with help of the bootstrap API (see ...) or the XML configuration (see ...).
-
-### Applying property constraints to setter methods
-
-It might be useful to have the possibility to apply property constraints (defined on getter methods) also as parameter constraints within the corresponding setter methods.
-
-TODO: Might that be required/helpful by JAX-RS?
-
-#### Option 1: A class-level annotation:
-
-@ApplyPropertyConstraintsToSetters
-public class Foo {
-
-}
-
-#### Option 2: A property level annotation:
-
-public class Foo {
-
- @ApplyToSetter
- @Min(5)
- public int getBar() {
-   return bar;
- }
-}
-
-#### Option 3: An option in the configuration API:
-
-Validator validator = Validation.byDefaultProvider()
-       .configure()
-       .applyPropertyConstraintsToSetters()
-       .buildValidatorFactory()
-       .getValidator();
-
-The options don't really exclude but amend each other.
 
 ## Validating method level constraints
 
@@ -136,13 +105,22 @@ The following new methods are suggested on `j.v.Validator` (see [GitHub](https:/
 		T object, Constructor<T> constructor, Object parameterValue, int parameterIndex, Class<?>... groups);
 
 	<T> Set<MethodConstraintViolation<T>> validateAllConstructorParameters(
-		T object, Constructor<T> constructor, , Object[] parameterValues, Class<?>... groups);
+		T object, Constructor<T> constructor, Object[] parameterValues, Class<?>... groups);
 
 TODO: Add these methods to the listing in section 4.1
 
 ### Methods for method level validation (to become 4.1.2)
 
-`<T> Set<MethodConstraintViolation<T>> validateParameter(T object, Method method, Object parameterValue, int parameterIndex, Class<?>... groups)` validates the value (identified by `parameterValue`) for a single method parameter (identified by `method` and `parameterIndex`). A `Set` containing all `MethodConstraintViolation` objects representing the failing constraints is returned, an empty `Set` is returned otherwise.
+The method `<T> Set<MethodConstraintViolation<T>> validateParameter(T object, Method method, Object parameterValue, int parameterIndex, Class<?>... groups)` validates the value (identified by `parameterValue`) for a single method parameter (identified by `method` and `parameterIndex`). A `Set` containing all `MethodConstraintViolation` objects representing the failing constraints is returned, an empty `Set` is returned otherwise.
+
+The method `<T> Set<MethodConstraintViolation<T>> validateAllParameters(T object, Method method, Object[] parameterValues, Class<?>... groups);` validates the arguments (as given in `parameterValues`) for the parameters of a given method (identified by `method`). A `Set` containing all `MethodConstraintViolation` objects representing the failing constraints is returned, an empty `Set` is returned otherwise.
+
+The method `<T> Set<MethodConstraintViolation<T>> validateConstructorParameter(T object, Constructor<T> constructor, Object parameterValue, int parameterIndex, Class<?>... groups);` validates the value (identified by `parameterValue`) for a single method parameter (identified by `constructor` and `parameterIndex`). A `Set` containing all `MethodConstraintViolation` objects representing the failing constraints is returned, an empty `Set` is returned otherwise.
+
+The method `<T> Set<MethodConstraintViolation<T>> validateAllConstructorParameters(T object, Constructor<T> constructor, Object[] parameterValues, Class<?>... groups);` validates the arguments (as given in `parameterValues`) for the parameters of a given constructor (identified by `constructor`). A `Set` containing all `MethodConstraintViolation` objects representing the failing constraints is returned, an empty `Set` is returned otherwise.
+
+The method `<T> Set<MethodConstraintViolation<T>> validateReturnValue(T object, Method method, Object returnValue, Class<?>... groups);` validates the return value (specified by `returnValue`) of a given method (identified by `method`). A `Set` containing all `MethodConstraintViolation` objects representing the failing constraints is returned, an empty `Set` is returned otherwise.
+
 
 #### Examples
 
@@ -322,3 +300,37 @@ Bean Validation provides a reference exception for such cases. Frameworks and ap
 
 * section [2.1](http://beanvalidation.org/1.0/spec/#constraintsdefinitionimplementation-constraintdefinition): `ElementType.PARAMETER` should be mandatory now
 * section [3.1.2](http://beanvalidation.org/1.0/spec/#constraintdeclarationvalidationprocess-requirements-property): Remove sentence "Constraints on non getter methods are not supported."
+
+## Misc.
+
+### Applying property constraints to setter methods
+
+It might be useful to have the possibility to apply property constraints (defined on getter methods) also as parameter constraints within the corresponding setter methods.
+
+TODO: Might that be required/helpful by JAX-RS?
+
+#### Option 1: A class-level annotation:
+
+	@ApplyPropertyConstraintsToSetters
+	public class Foo {
+	
+	}
+
+#### Option 2: A property level annotation:
+
+	public class Foo {
+	
+		@ApplyToSetter
+		@Min(5)
+		public int getBar() { return bar; }
+	}
+
+#### Option 3: An option in the configuration API:
+
+	Validator validator = Validation.byDefaultProvider()
+	       .configure()
+	       .applyPropertyConstraintsToSetters()
+	       .buildValidatorFactory()
+	       .getValidator();
+
+The options don't really exclude but amend each other.
