@@ -8,7 +8,38 @@ author: Gunnar Morling
 
 [Link to JIRA ticket](https://hibernate.onjira.com/browse/BVAL-241)
 
-## Goal
+## Contents
+
+* [Goal](#Goal)
+* [Declaring method level constraints (to become 3.5?)](#method_level)
+    * [Requirements on methods to be validated](#requirements)
+    * [Defining parameter constraints](#parameter)
+        * [Cross-parameter constraints](#cross_parameter)
+        * [Naming parameters](#naming)
+    * [Defining return value constraints](#return_value)
+    * [Marking parameters and return values for cascaded validation](#cascaded)
+    * [Inheritance hierarchies](#inheritance)
+        * [Option 1: Don't allow allow refinement](#no_refinement)
+        * [Option 2: allow return value refinement (AND style)](#return_refinement)
+        * [Option 3: allow param (OR style) and return value (AND style) refinement](#parameter_refinement)
+* [Validating method level constraints](#validating)
+    * [MethodConstraintViolation (to become 4.3)](#method_constraint_violation)
+    * [Triggering validation](#triggering)
+        * [Option 1: reuse @Valid or have a new one](#at_valid)
+        * [Option 2: let each integrator use a specific annotation or propose a BV one](#specific)
+        * [Option 3: put it on the method validated (a global set of groups per method) or on a per parameter](on_method)
+* [Extensions to the meta-data API](#meta_data)
+* [Extensions to the XML schema for constraint mappings](#xml)
+    * [MethodConstraintViolationException (to become 8.2)](#mcve)
+* [Required changes in 1.0 wording](#changes)
+* [Misc.](#misc)
+    * [Validating invariants](#invariants)
+    * [Applying property constraints to setter methods](#setters)
+        * [Option 1: A class-level annotation](#class)
+        * [Option 2: A property level annotation](#property)
+        * [Option 3: An option in the configuration API](#option)
+
+## Goal <a id="Goal"/>
 
 In addition to the validation of JavaBeans, the Bean Validation API also allows to declare and validate constraints on a method level. This allows to use the Bean Validation API for a programming style known as "programming by contract". More specifically this means that any Bean Validation constraints can be used to describe
 
@@ -20,7 +51,7 @@ Compared to traditional means of checking the sanity of a method's argument valu
 * These checks don't have to be performed manually, which results in less code to write and maintain.
 * The pre- and postconditions applying for a method don't have to be expressed again in the method's JavaDoc, since any of it's annotations will automatically be included in the generated JavaDoc. This means less redundancy which reduces the chance of inconsistencies between implementation and comments.
 
-## Declaring method level constraints (to become 3.5?)
+## Declaring method level constraints (to become 3.5?) <a id="method_level"/>
 
 Note: In the following, the term "method level constraint" refers to constraints declared on methods as well as constructors.
 
@@ -28,13 +59,13 @@ Method constraints are defined by adding constraint annotations to method or con
 
 As with bean constraints, this can happen using either actual Java annotations or using an XML constraint mapping file (see ...). BV providers are free to provide additional means of defining method constraints such as an API-based aproach.
 
-### Requirements on methods to be validated
+### Requirements on methods to be validated <a id="requirements"/>
 
 Methods which shall be annotated with parameter or return value constraints must be non-static. 
 
 There is no restriction with respect to the visibility of validated methods from the perspective of this specification, but it's possible that certain technologies integrating with method validation (see ...) support only the validation of methods with certain visibilities.
 
-### Defining parameter constraints
+### Defining parameter constraints <a id="parameter"/>
  
 Parameter constraints are defined by putting constraint annotations to method or constructor parameters.
 
@@ -62,9 +93,151 @@ Note that declaring these constraints does not automatically cause their validat
 
 Tip: In order to use constraint annotations for method parameters, their element type must be `ELEMENTTYPE.METHOD`. All built-in constraints support this element type and it's considered a best practice to do the same for custom constraints also if they are not primarily intended to be used as parameter constraints.
 
-#### Cross-parameter constraints
+#### Cross-parameter constraints ([BVAL-232](https://hibernate.onjira.com/browse/BVAL-232)) <a id="cross_parameter"/>
 
-#### Naming parameters
+DISCUSSION: There are several options for implementing cross-parameter constraints. I feel rather unsure about which one to pursue, likely I'd prefer to provide #3 and #4. #2 seems obvious at first but has actually more disadvantages compared to #3.
+
+##### Option 1: Don't support cross-parameter constraints
+
+* Pro: Wait for actual user demand, let BV providers come up with specific solutions, see what works out best
+* Con: Needs BV providers to come up with specific solutions ;-)
+
+##### Option 2: New interface `MethodConstraintValidator`
+
+We could have a new interface `MethodConstraintValidator` which gets the parameters passed as `Object[]` to the `isValid()` method:
+
+	/**
+	 * Defines the logic to validate a given cross-parameter method level constraint A.
+	 *
+	 * @author Gunnar Morling
+	 */
+	public interface MethodConstraintValidator<A extends Annotation> {
+
+		/**
+		 * Initializes the validator in preparation for isValid calls.
+		 * The constraint annotation for a given constraint declaration
+		 * is passed.
+		 * <p/>
+		 * This method is guaranteed to be called before any use of this instance for
+		 * validation.
+		 *
+		 * @param constraintAnnotation annotation instance for a given constraint declaration
+		 */
+		void initialize(A constraintAnnotation);
+
+		/**
+		 * Implement the validation logic.
+		 * The state of <code>value</code> must not be altered.
+		 *
+		 * This method can be accessed concurrently, thread-safety must be ensured
+		 * by the implementation.
+		 *
+		 * @param parameterValues The parameter values to be validated.
+		 * @param context context in which the constraint is evaluated
+		 *
+		 * @return false if <code>value</code> does not pass the constraint
+		 */
+		boolean isValid(Object[] parameterValues, ConstraintValidatorContext context);
+	}
+
+Example:
+
+	public class ReservationService {
+
+		@DateParameterCheck
+		void bookHotel(@NotNull Customer customer, @NotNull Date from, @NotNull Date to) {
+			//...
+		}
+	}
+
+	public class DateParameterCheckValidator implements MethodConstraintValidator<DateParameterCheck> {
+
+		@Override
+		public void initialize(DateParameterCheck constraint) {}
+
+		@Override
+		public boolean isValid(Object[] parameterValues, ConstraintValidatorContext context) {
+			if(parameterValues[1] == null || parameterValues[2] == null) {
+				return true;
+			}
+
+			return ((Date)parameterValues[1]).before((Date)parameterValues[2]);
+		}
+}
+
+* Pro: Rathers straight-forward
+* Con: Not that type-safe: Fiddling with object array, casts etc. required. How to avoid using constraints at methods with wrong signature? This will just fail upon invoking `isValid()`.
+
+##### Option 3: Invoke validator methods by signature matching
+
+Instead of having a static `isValid()` method, one could be invoked by signature matching. We would have an initialization contract:
+
+	public interface Initializable<A extends Annotation> {
+
+		void initialize(A constraintAnnotation);
+
+	}
+
+Validator implementations must define a matching `isValid()` method per supported signature:
+
+	public class ReservationService {
+
+		@DateParameterCheck
+		void bookHotel(@NotNull Customer customer, @NotNull Date from, @NotNull Date to) {
+			//...
+		}
+
+		@DateParameterCheck //from must be before to AND alternativeTo
+		void bookHotel(@NotNull Customer customer, @NotNull Date from, @NotNull Date to, @NotNull Date alternativeTo) {
+			//...
+		}
+	}
+
+	public class DateParameterCheckValidator implements Initializable<DateParameterCheck> {
+
+		@Override
+		public void initialize(DateParameterCheck constraint) {}
+
+		public boolean isValid(Customer customer, Date from, Date to, ConstraintValidatorContext context) {
+			if(from == null || to == null) {
+				return true;
+			}
+			return from.before(to);
+		}
+
+		public boolean isValid(Customer customer, Date from, Date to, Date alternativeTo, ConstraintValidatorContext context) {
+			if(from == null || to == null || alternativeTo == null) {
+				return true;
+			}
+			return from.before(to) && from.before(alternativeTo);
+		}
+	}
+
+* Pro: Implementation of validators much simpler to write and read (no casts required)
+* Pro: Allows BV providers to check for matching validators and fail if none exists (exception raised by BV and NOT in validator)
+* Con: `isValid()` method can't be defined in validator interface
+* Con: Not refactoring safe (changing signatures), but option #2 isn't as well)
+
+##### Option 4: Have a script based approach:
+
+We might define a special script based constraint:
+
+	public class ReservationService {
+
+		@ParameterAssert(script="arg1.before(arg2)", lang="javascript")
+		void bookHotel(@NotNull Customer customer, @NotNull Date from, @NotNull Date to) {
+			//...
+		}
+	}
+
+* Pro: Good to read and write
+* Con: Not type safe
+
+Parameter names would be retrieved via the `ParameterNameProvider` (see next section).
+
+Probably basic constraints (`@NotNull` etc.) should be checked beforehand in order to allow for concise script expressions without redundant null checks.
+
+#### Naming parameters <a id="naming"/>
 
 If the validation of a parameter constraint fails the concerned parameter needs to be identified in the resulting `MethodConstraintViolation` (see ...).
 
@@ -81,7 +254,7 @@ A conforming BV implementation provides a default `ParameterNameProvider` implem
 
 BV providers are free to provide additional implementations (e.g. based on annotations specifying parameter names, debug symbols etc.). If a user wishes to use another parameter name provider than the default implementation, she may specify the provider to use with help of the bootstrap API (see ...) or the XML configuration (see ...).
 
-### Defining return value constraints
+### Defining return value constraints <a id="return_value"/>
 
 Return value constraints are defined by putting constraint annotations directly to the method itself.
 
@@ -112,7 +285,7 @@ As with parameter constraints, these return value constraints are not automatica
 
 DISCUSSION: Should property constraints (on getter methods) also be handled as method constraint?
 
-### Marking parameters and return values for cascaded validation
+### Marking parameters and return values for cascaded validation <a id="cascaded"/>
 
 Similar to normal bean validation, the `@Valid` annotation can be used, to declare that a cascaded validation of given method parameters or return values shall be performed by the Bean Validation provider.
 
@@ -149,20 +322,20 @@ DISCUSSION: There were discussions whether to use `@Valid` or a new annotation s
 
 IMO introducing a new annotation doesn't really make sense, as the `@Valid` annotation is used here in its originally intended sense: marking a (referenced) object for cascaded validation.
 
-### Inheritance hierarchies
+### Inheritance hierarchies <a id="inheritance"/>
 
 When defining method level constraints within inheritance hierarchies (that is, class inheritance by extending base classes and interface inheritance by implementing interfaces) one generally has to deal with the [Liskov substitution principle](http://en.wikipedia.org/wiki/Liskov_substitution_principle) which mandates that
 
 * a methods preconditions (as represented by parameter constraints) may not be strengthened in sub types
 * a methods postconditions (as represented by return value constraints) may not be weakened in sub types
 
-#### Option 1: Don't allow allow refinement
+#### Option 1: Don't allow allow refinement <a id="no_refinement"/>
 
-#### Option 2: allow return value refinement (AND style)
+#### Option 2: allow return value refinement (AND style) <a id="return_refinement"/>
 
-#### Option 3: allow param (OR style) and return value (AND style) refinement
+#### Option 3: allow param (OR style) and return value (AND style) refinement <a id="parameter_refinement"/>
 
-## Validating method level constraints
+## Validating method level constraints <a id="validating"/>
 
 As standard bean constraints method level constraints are evaluated using the `javax.validation.Validator` API.
 
@@ -185,7 +358,7 @@ The following new methods are suggested on `j.v.Validator` (see [GitHub](https:/
 
 TODO: Add these methods to the listing in section 4.1
 
-### Methods for method level validation (to become 4.1.2)
+### Methods for method level validation (to become 4.1.2) <a id="mfm"/>
 
 The method `<T> Set<MethodConstraintViolation<T>> validateParameter(T object, Method method, Object parameterValue, int parameterIndex, Class<?>... groups)` validates the value (identified by `parameterValue`) for a single method parameter (identified by `method` and `parameterIndex`). A `Set` containing all `MethodConstraintViolation` objects representing the failing constraints is returned, an empty `Set` is returned otherwise.
 
@@ -200,7 +373,7 @@ The method `<T> Set<MethodConstraintViolation<T>> validateReturnValue(T object, 
 
 #### Examples
 
-### MethodConstraintViolation (to become 4.3)
+### MethodConstraintViolation (to become 4.3) <a id="method_constraint_violation"/>
 
 `MethodConstraintViolation` is the class describing a single method constraint failure. A (possibly empty) set of `MethodConstraintViolation` is returned for a method validation.
 	
@@ -297,31 +470,29 @@ TODO: describe behavior of getPropertyPath() (and getRootBean()) as inherited fr
 
 #### Examples
 
-### Triggering validation
+### Triggering validation <a id="triggering"/>
 
-It's important to understand that BV itself doesn't trigger the evaluation of any method level constraints. That is, just annotating any methods with parameter or return value constraints doesn't automatically enforce these constraints, just as annotating any fields or properties with bean constraints does enforce these either.
+It's important to understand that BV itself doesn't trigger the evaluation of any method level constraints. That is, just annotating any methods with parameter or return value constraints doesn't automatically enforce these constraints, just as annotating any fields or properties with bean constraints doesn't enforce these either.
 
-Instead method level constraints must be validated by invoking the appropriate methods on `j.v.Validator`. This typically happens using approaches and techniques such as:
+Instead method level constraints must be validated by invoking the appropriate methods on `javax.validation.Validator`. This typically happens using approaches and techniques such as:
 
 * CDI/EJB interceptors
 * aspect-oriented programming
 * Java proxies
 
-#### Options
+Possible options as per Emmanuel's mail:
 
-From Emmanuel's mail:
+#### Option 1: reuse @Valid or have a new one <a id="at_valid"/>
 
-* reuse @Valid or have a new one
-* let each integrator use a specific annotation or propose a BV one
-* put it on the method validated (a global set of groups per method) or on a per parameter
+#### Option 2: let each integrator use a specific annotation or propose a BV one <a id="specific"/>
 
-### Validating invariants
+#### Option 3: put it on the method validated (a global set of groups per method) or on a per parameter <a id="on_method"/>
 
-## Extensions to the meta-data API
+## Extensions to the meta-data API <a id="meta_data"/>
 
-## Extensions to the XML schema for constraint mappings
+## Extensions to the XML schema for constraint mappings <a id="xml"/>
 
-## MethodConstraintViolationException (to become 8.2)
+## MethodConstraintViolationException (to become 8.2) <a id="mcve"/>
 
 The method validation mechanism is typically not invoked manually during normal program execution, but rather automatically using a proxy, method interceptor or similar. Typically the program flow shouldn't continue its normal execution in case a parameter or return value constraint is violated which is realized by throwing an exception. 
 
@@ -374,27 +545,33 @@ Bean Validation provides a reference exception for such cases. Frameworks and ap
 	
 	}
 
-## Required changes in 1.0 wording
+## Required changes in 1.0 wording <a id="changes"/>
 
 * section [2.1](http://beanvalidation.org/1.0/spec/#constraintsdefinitionimplementation-constraintdefinition): `ElementType.PARAMETER` should be mandatory now
 * section [3.1.2](http://beanvalidation.org/1.0/spec/#constraintdeclarationvalidationprocess-requirements-property): Remove sentence "Constraints on non getter methods are not supported."
 
-## Misc.
+## Misc. <a id="misc"/>
 
-### Applying property constraints to setter methods
+### Validating invariants <a id="invariants"/>
+
+DISCUSSION: Should there be some way to trigger validation of bean constraints upon method invocations?
+
+IMO this falls in the same category as triggering method validation itself and should be handled by integrators, e.g. by defining a interceptor binding annotation for CDI.
+
+### Applying property constraints to setter methods <a id="setters"/>
 
 It might be useful to have the possibility to apply property constraints (defined on getter methods) also as parameter constraints within the corresponding setter methods.
 
-TODO: Might that be required/helpful by JAX-RS?
+DISCUSSION: Might that be required/helpful by JAX-RS?
 
-#### Option 1: A class-level annotation:
+#### Option 1: A class-level annotation <a id="class"/>
 
 	@ApplyPropertyConstraintsToSetters
 	public class Foo {
 	
 	}
 
-#### Option 2: A property level annotation:
+#### Option 2: A property level annotation <a id="property"/>
 
 	public class Foo {
 	
@@ -403,7 +580,7 @@ TODO: Might that be required/helpful by JAX-RS?
 		public int getBar() { return bar; }
 	}
 
-#### Option 3: An option in the configuration API:
+#### Option 3: An option in the configuration API <a id="option"/>
 
 	Validator validator = Validation.byDefaultProvider()
 	       .configure()
