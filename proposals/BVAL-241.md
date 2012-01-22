@@ -10,23 +10,35 @@ author: Gunnar Morling
 
 ## Goal
 
-As proposed in BV 1.0 Appendix C, the notion of method validation shall be established. This will allow to use the Bean Validation API for programming by contract.
+In addition to the validation of JavaBeans, the Bean Validation API also allows to declare and validate constraints on a method level. This allows to use the Bean Validation API for a programming style known as "programming by contract". More specifically this means that any Bean Validation constraints can be used to describe
 
-## Defining method level constraints
+* the preconditions that must be met before a method may legally be invoked and
+* postconditions that are guaranteed after a method invocation returns.
 
-Note: In the following, the term "method level" constraint refers to constraints declared on methods as well as constructors.
+Compared to traditional means of checking the sanity of a method's argument values (within the method implementation) and its return value (by the caller after invoking the method) this approach has several advantages:
 
-Method constraints are defined by ading constraint annotations to method or constructor parameters (parameter constraints) or methods (return value constraints). As with bean constraints, this can happen using either actual Java annotations or using an XML constraint mapping file (see ...). BV providers are free to provide additional means of defining method constraints such as an API-based aproach.
+* These checks don't have to be performed manually, which results in less code to write and maintain.
+* The pre- and postconditions applying for a method don't have to be expressed again in the method's JavaDoc, since any of it's annotations will automatically be included in the generated JavaDoc. This means less redundancy which reduces the chance of inconsistencies between implementation and comments.
+
+## Declaring method level constraints (to become 3.5?)
+
+Note: In the following, the term "method level constraint" refers to constraints declared on methods as well as constructors.
+
+Method constraints are defined by adding constraint annotations to method or constructor parameters (parameter constraints) or methods (return value constraints). 
+
+As with bean constraints, this can happen using either actual Java annotations or using an XML constraint mapping file (see ...). BV providers are free to provide additional means of defining method constraints such as an API-based aproach.
 
 ### Requirements on methods to be validated
 
-Methods which shall be annotated with parameter or return value constraints must be non-static. There is no restriction with respect to the visibility of validated methods from the perspective of this specification, but it's possible that certain technologies integrating with method validation (see ...) support only the validation of methods with certain visibilities.
+Methods which shall be annotated with parameter or return value constraints must be non-static. 
+
+There is no restriction with respect to the visibility of validated methods from the perspective of this specification, but it's possible that certain technologies integrating with method validation (see ...) support only the validation of methods with certain visibilities.
 
 ### Defining parameter constraints
  
-Parameter constraints are defined by simply annotating method or constructor parameters:
+Parameter constraints are defined by putting constraint annotations to method or constructor parameters.
 
-An example:
+Example xy: Declaring parameter constraints
 
 	public class OrderService {
 
@@ -45,6 +57,8 @@ Here the following preconditions are defined which must be satisfied in order to
 * The customer code passed to the `placeOrder()` method must not be null and must be between 3 and 20 characters long.
 * The `Item` passed to the `placeOrder()` method must not be null.
 * The quantity passed to the `placeOrder()` method must be 1 at least.
+
+Note that declaring these constraints does not automatically cause their validation when the concerned methods are invoked. It's the responsibility of an integration layer to trigger the validation of the constraints using a method interceptor, dynamic proxy or similar. See chapter ... for more details.
 
 Tip: In order to use constraint annotations for method parameters, their element type must be `ELEMENTTYPE.METHOD`. All built-in constraints support this element type and it's considered a best practice to do the same for custom constraints also if they are not primarily intended to be used as parameter constraints.
 
@@ -69,9 +83,71 @@ BV providers are free to provide additional implementations (e.g. based on annot
 
 ### Defining return value constraints
 
-TODO: Should property constraints (on getter methods) also be handled as method constraint?
+Return value constraints are defined by putting constraint annotations directly to the method itself.
 
-### Marking parameters/return values for cascaded validation
+Example xy: Declaring return value constraints
+
+	public class OrderService {
+
+		@NotNull
+		@Size(min=1)
+		public Set<CreditCardProcessor> getCreditCardProcessors() {
+			//...
+		}
+
+		@NotNull
+		@Future
+		public Date getNextAvailableDeliveryDate() {
+			//...
+		}
+	}
+
+Here the following postconditions are defined which are guaranteed to the caller of the methods of the `OrderService` class:
+
+* The set of `CreditCardProcessor` objects returned by `getCreditCardProcessors()` will neither be null nor empty.
+
+* The `Date` object returned by `getNextAvailableDeliveryDate()` will not be null and be in the future.
+
+As with parameter constraints, these return value constraints are not automatically validated upon method invocation but instead an integration layer invoking the validation is required.
+
+DISCUSSION: Should property constraints (on getter methods) also be handled as method constraint?
+
+### Marking parameters and return values for cascaded validation
+
+Similar to normal bean validation, the `@Valid` annotation can be used, to declare that a cascaded validation of given method parameters or return values shall be performed by the Bean Validation provider.
+
+Generally the same rules as for standard object graph validation (see 3.5.1) apply, in particular
+
+* null arguments and return values are ignored
+* the validation is recursive, that is, if validated parameter or return value objects have references marked with `@Valid` themselves, these references will also be validated
+* Bean Validation providers must guarantee the prevention of infinite loops during cascaded validation.
+
+Example xy: Marking parameters and return values for cascaded validation
+
+	public class OrderService {
+
+		@Valid
+		public Order getOrderByPk(@NotNull @Valid OrderPK orderPk) {
+			//...
+		}
+	
+		@NotNull
+		@Valid
+		public Set<Order> getOrdersByCustomer(@NotNull @Valid CustomerPK customerPk) {
+			//...
+		}		
+	}
+
+Here the following recursive validations will happen when validating the methods of the `OrderService` class:
+
+* Validation of the constraints on the object passed for the `orderPk` parameter and the returned `Order` object of the `getOrderByPk()` method
+* Validation of the constraints on the object passed for the `customerPk` parameter and the constraints on each object contained within the returned `Set<Order>` of the getOrdersByCustomer() method
+
+Again, solely marking parameters and return values for cascaded validation does not trigger the actual validation.
+
+DISCUSSION: There were discussions whether to use `@Valid` or a new annotation such as `@ValidParameter`. 
+
+IMO introducing a new annotation doesn't really make sense, as the `@Valid` annotation is used here in its originally intended sense: marking a (referenced) object for cascaded validation.
 
 ### Inheritance hierarchies
 
