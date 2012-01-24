@@ -24,9 +24,6 @@ author: Gunnar Morling
     * [Methods for method level validation (to become 4.1.2)](#mfm)
     * [MethodConstraintViolation (to become 4.3)](#method_constraint_violation)
     * [Triggering validation](#triggering)
-        * [Option 1: reuse @Valid or have a new one](#at_valid)
-        * [Option 2: let each integrator use a specific annotation or propose a BV one](#specific)
-        * [Option 3: put it on the method validated (a global set of groups per method) or on a per parameter](#on_method)
 * [Extensions to the meta-data API](#meta_data)
     * [BeanDescriptor (5.3)](#bean_descriptor)
     * [MethodDescriptor (to become 5.5)](#method_descriptor)
@@ -102,7 +99,7 @@ Tip: In order to use constraint annotations for method parameters, their element
 
 #### Cross-parameter constraints ([BVAL-232](https://hibernate.onjira.com/browse/BVAL-232)) <a id="cross_parameter"/>
 
-DISCUSSION: There are several options for implementing cross-parameter constraints. I feel rather unsure about which one to pursue, likely I'd prefer to provide #3 and #4. #2 seems obvious at first but has actually more disadvantages compared to #3.
+*DISCUSSION: There are several options for implementing cross-parameter constraints. I feel rather unsure about which one to pursue, likely I'd prefer to provide #3 and #4. #2 seems obvious at first but has actually more disadvantages compared to #3.*
 
 ##### Option 1: Don't support cross-parameter constraints
 
@@ -292,7 +289,7 @@ Here the following postconditions are defined which are guaranteed to the caller
 
 As with parameter constraints, these return value constraints are not automatically validated upon method invocation but instead an integration layer invoking the validation is required.
 
-DISCUSSION: Should property constraints (on getter methods) also be handled as method constraint?
+*DISCUSSION: Should property constraints (on getter methods) also be handled as method constraints?*
 
 ### Marking parameters and return values for cascaded validation <a id="cascaded"/>
 
@@ -327,9 +324,9 @@ Here the following recursive validations will happen when validating the methods
 
 Again, solely marking parameters and return values for cascaded validation does not trigger the actual validation.
 
-DISCUSSION: There were discussions whether to use `@Valid` or a new annotation such as `@ValidParameter`. 
+*DISCUSSION: There were discussions whether to use `@Valid` or a new annotation such as `@ValidParameter`.*
 
-IMO introducing a new annotation doesn't really make sense, as the `@Valid` annotation is used here in its originally intended sense: marking a (referenced) object for cascaded validation.
+*IMO introducing a new annotation doesn't really make sense, as the `@Valid` annotation is used here in its originally intended sense: marking a (referenced) object for cascaded validation.*
 
 ### Inheritance hierarchies <a id="inheritance"/>
 
@@ -401,13 +398,13 @@ Example xy: Correctly declared return value constraints on sub class
 
 The return value constraints in `DefaultOrderService` in example xy are legal, as they strengthen the postconditions of `placeOrder()` as constituted by the super class `OrderService` but don't weaken it.
 
-DISCUSSION: Besides the proposed approach other options include to not allow refinement at all and to allow also parameter constraint refining by OR-ing the parameter constraints. The first is unnecessary strict to me, while the latter seems somewhat undeterministic to me. I sensed some agreement on the proposal above in the discussions on the mailing list.
+*DISCUSSION: Besides the proposed approach other options include to not allow refinement at all and to allow also parameter constraint refining by OR-ing the parameter constraints. The first is unnecessary strict to me, while the latter seems somewhat undeterministic to me. I sensed some agreement on the proposal above in the discussions on the mailing list.*
 
 ## Validating method level constraints <a id="validating"/>
 
 As standard bean constraints method level constraints are evaluated using the `javax.validation.Validator` API.
 
-The following new methods are suggested on `javax.validation.Validator` (to be added to the listing in section 4.1): 
+The following new methods are suggested on `javax.validation.Validator` (to be added to the listing in section 4.1):
 
 	<T> Set<MethodConstraintViolation<T>> validateParameter(
 		T object, Method method, Object parameterValue, int parameterIndex, Class<?>... groups);
@@ -424,7 +421,7 @@ The following new methods are suggested on `javax.validation.Validator` (to be a
 	<T> Set<MethodConstraintViolation<T>> validateAllConstructorParameters(
 		T object, Constructor<T> constructor, Object[] parameterValues, Class<?>... groups);
 
-DISCUSSION: Would a separate interface `MethodValidator` make sense? I personally don't think so, but maybe there are arguments for that.
+*DISCUSSION: Would a separate interface `MethodValidator` make sense? I personally don't think so, but maybe there are arguments for that.*
 
 ### Methods for method level validation (to become 4.1.2) <a id="mfm"/>
 
@@ -575,17 +572,17 @@ As it is expected though, that a very common approach will be to leverage annota
 
 The `ValidateGroups` annotation can be used on type as well as on method level, using the `groups` attribute the groups to be validated can be specified. Using the `validationMode` attribute it can be controlled whether only parameters, only return values or both shall be validated.
 
-DISCUSSION: IMO BV should provide an annotation as suggested above, so that integrators doen't need to create their own one. CDI requires interceptor binding annotions such as this one to be annotated with the `@InterceptorBinding` meta-annotation. But according to Pete Muir from the CDI EG this could happen programmatically by the CDI runtime so we don't have a compile-time dependency to CDI here.
+*DISCUSSION: IMO BV should provide an annotation as suggested above, so that integrators doen't need to create their own one. CDI requires interceptor binding annotions such as this one to be annotated with the `@InterceptorBinding` meta-annotation. But according to Pete Muir from the CDI EG this could happen programmatically by the CDI runtime so we don't have a compile-time dependency to CDI here.*
 
-DISCUSSION: Is there a better name than `ValidateGroups`? IMO an adjective would be make a better annotation name. In Seam Validation it's called `@AutoValidating`.
+*DISCUSSION: Is there a better name than `ValidateGroups`? IMO an adjective would be make a better annotation name. In Seam Validation it's called `@AutoValidating`.*
 
 Possible other options as per Emmanuel's mail:
 
-> #### Option 1: reuse @Valid or have a new one <a id="at_valid"/>
-> 
-> #### Option 2: let each integrator use a specific annotation or propose a BV one <a id="specific"/>
+> Option 1: reuse @Valid or have a new one <a id="at_valid"/>
 >
-> #### Option 3: put it on the method validated (a global set of groups per method) or on a per parameter <a id="on_method"/>
+> Option 2: let each integrator use a specific annotation or propose a BV one <a id="specific"/>
+>
+> Option 3: put it on the method validated (a global set of groups per method) or on a per parameter <a id="on_method"/>
 
 ## Extensions to the meta-data API <a id="meta_data"/>
 
@@ -767,15 +764,15 @@ Bean Validation provides a reference exception for such cases. Frameworks and ap
 
 ### Validating invariants <a id="invariants"/>
 
-DISCUSSION: Should there be some way to trigger validation of bean constraints upon method invocations?
+*DISCUSSION: Should there be some way to trigger validation of bean constraints upon method invocations?*
 
-IMO this falls in the same category as triggering method validation itself and should be handled by integrators, e.g. by defining a interceptor binding annotation for CDI.
+*IMO this falls in the same category as triggering method validation itself and should be handled by integrators, e.g. by defining a interceptor binding annotation for CDI.*
 
 ### Applying property constraints to setter methods <a id="setters"/>
 
 It might be useful to have the possibility to apply property constraints (defined on getter methods) also as parameter constraints within the corresponding setter methods.
 
-DISCUSSION: Might that be required/helpful by JAX-RS?
+*DISCUSSION: Might that be required/helpful by JAX-RS?*
 
 #### Option 1: A class-level annotation <a id="class"/>
 
