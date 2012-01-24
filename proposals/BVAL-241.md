@@ -22,7 +22,9 @@ author: Gunnar Morling
         * [Examples](#inheritance_examples)
 * [Validating method level constraints](#validating)
     * [Methods for method level validation (to become 4.1.2)](#mfm)
+        * [Examples](#validating_examples)
     * [MethodConstraintViolation (to become 4.3)](#method_constraint_violation)
+        * [Examples](#mcv_examples)
     * [Triggering validation](#triggering)
 * [Extensions to the meta-data API](#meta_data)
     * [BeanDescriptor (5.3)](#bean_descriptor)
@@ -478,7 +480,7 @@ The method `<T> Set<MethodConstraintViolation<T>> validateReturnValue(T object, 
 
 TODO: What's the root bean in case of constructor parameter validation? The object isn't created yet.
 
-#### Examples
+#### Examples <a id="validating_examples"/>
 
 All the examples will be based on the following class definitions, constraint declarations and instances.
 
@@ -536,17 +538,17 @@ The following constructor parameter validation will return one `MethodConstraint
 
 Assuming the `placeOrder` method returned `null`, the following return value validation will return one `MethodConstraintViolation`:
 
-	validator.validateAllParameters(orderService, placeOrder, null).size() == 1;
+	validator.validateReturnValue(orderService, placeOrder, null).size() == 1;
 
 TODO: More examples to follow. Define semantics of constructor validation.
 
 ### MethodConstraintViolation (to become 4.3) <a id="method_constraint_violation"/>
 
-`MethodConstraintViolation` is the class describing a single method constraint failure. A (possibly empty) set of `MethodConstraintViolation` is returned for a method validation.
-	
+`MethodConstraintViolation` is the class describing a single method constraint failure. A (possibly empty) set of `MethodConstraintViolation`s is returned for a method validation.
+
 	/**
-	 * Describes the violation of a method-level constraint by providing access
-	 * to the method/parameter hosting the violated constraint etc.
+	 * Describes the violation of a method-level constraint by providing access to
+	 * the method, constructor (and parameter) hosting the violated constraint etc.
 	 *
 	 * @author Gunnar Morling
 	 */
@@ -557,75 +559,27 @@ TODO: More examples to follow. Define semantics of constructor validation.
 		 *
 		 * @author Gunnar Morling
 		 */
-		public static enum Kind {
-
-			/**
-			 * Identifies constraint violations occurred during the validation of a
-			 * constructor parameter.
-			 */
-			CONSTRUCTOR_PARAMETER,
-			
-			/**
-			 * Identifies constraint violations occurred during the validation of a
-			 * method parameter.
-			 */
-			METHOD_PARAMETER,
-	
-			/**
-			 * Identifies constraint violations occurred during the validation of a
-			 * method's return value.
-			 */
-			RETURN_VALUE
+		public enum Kind {
+			METHOD_PARAMETER, CONSTRUCTOR_PARAMETER, RETURN_VALUE;
 		}
-	
-		/**
-		 * Returns the method during which's validation this constraint violation
-		 * occurred.
-		 *
-		 * @return The method during which's validation this constraint violation
-		 *         occurred.
-		 */
+
 		Method getMethod();
-	
-		/**
-		 * Returns the index of the parameter holding the constraint which caused
-		 * this constraint violation.
-		 *
-		 * @return The index of the parameter holding the constraint which caused
-		 *         this constraint violation or null if this constraint violation is
-		 *         not of {@link Kind#PARAMETER}.
-		 */
+
+		Constructor<T> getConstructor();
+
 		Integer getParameterIndex();
-	
-		/**
-		 * <p>
-		 * Returns the name of the parameter holding the constraint which caused
-		 * this constraint violation.
-		 * </p>
-		 * <p>
-		 * Currently a synthetic name following the form <code>"arg" + index</code>
-		 * will be returned, e.g. <code>"arg0"</code>. In future versions it might
-		 * be possible to specify real parameter names, e.g. using an
-		 * annotation-based approach around <code>javax.inject.Named</code>.
-		 * </p>
-		 *
-		 * @return The name of the parameter holding the constraint which caused
-		 *         this constraint violation or null if this constraint violation is
-		 *         not of {@link Kind#PARAMETER}.
-		 */
+
 		String getParameterName();
-	
-		/**
-		 * Returns the kind of this method constraint violation.
-		 *
-		 * @return The kind of this method constraint violation.
-		 */
+
 		Kind getKind();
 	}
 
-The `getMethod()` method returns a `java.lang.reflect.Method` object representing the method hosting the violated constraint.
 
-Alternative: Should this be the invoked method? Or do we need both?
+The `getMethod()` method returns a `java.lang.reflect.Method` object representing the method hosting the violated constraint in case a method constraint was violated, `null` otherwise.
+
+TODO: Should this alternatively be the invoked method? Or do we need both? It makes a difference when constraints are defined on super types and an overriding/implementing method is validated.
+
+The `getConstructor()` method returns a `java.lang.reflect.Constructor` object representing the constructor hosting the violated constraint in case a constructor constraint was violated, `null` otherwise.
 
 The `getParameterIndex()` method returns the index of the parameter hosting the violated constraint in case it is a parameter constraint, otherwise `null`.
 
@@ -633,9 +587,29 @@ The `getParameterName()` method returns the name of the parameter hosting the vi
 
 The `getKind()` method returns the `Kind` of the constraint violation, which can either be `Kind.CONSTRUCTOR_PARAMETER`, `Kind.METHOD_PARAMETER` or `Kind.RETURN_VALUE`.
 
-TODO: describe behavior of getPropertyPath() (and getRootBean()) as inherited from `ConstraintViolation`)
+TODO: describe behavior of `getPropertyPath()`, `getLeafBean()`, `getRootBean()` etc. (as inherited from `ConstraintViolation`). Maybe `MethodConstraintViolation` shouldn't extend `ConstraintViolation`?
 
-#### Examples
+#### Examples <a id="mcv_examples"/>
+
+The following examples are based on the class definitions, constraint declarations and instances given in section 4.1.2.
+
+The method parameter validation
+
+	//orderService.placeOrder(null, item1, 1);
+	validator.validateAllParameters(orderService, placeOrder, new Object[] { null, item1, 1 }).size() == 1;
+
+will return a `MethodConstraintViolation` with the following properties:
+
+	assert placeOrder == constraintViolation.getMethod();
+	assert 0 == constraintViolation.getParameterIndex();
+	assert "arg0".equals(constraintViolation.getParameterName();
+	assert Kind.METHOD_PARAMETER == constraintViolation.getKind();
+
+	 //TODO: is that what we want?
+	assert orderService == constraintViolation.getRootBean();
+	assert "OrderService#placeOrder(arg0)".equals(constraintViolation.getPropertyPath().toString());
+
+TODO: Add further examples
 
 ### Triggering validation <a id="triggering"/>
 
