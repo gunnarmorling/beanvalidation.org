@@ -10,7 +10,7 @@ author: Gunnar Morling
 
 ## Contents
 
-* [Goal](#Goal)
+* [Goal](#goal)
 * [Declaring method level constraints (to become 3.5?)](#method_level)
     * [Requirements on methods to be validated](#requirements)
     * [Defining parameter constraints](#parameter)
@@ -19,15 +19,14 @@ author: Gunnar Morling
     * [Defining return value constraints](#return_value)
     * [Marking parameters and return values for cascaded validation](#cascaded)
     * [Inheritance hierarchies](#inheritance)
-        * [Option 1: Don't allow allow refinement](#no_refinement)
-        * [Option 2: allow return value refinement (AND style)](#return_refinement)
-        * [Option 3: allow param (OR style) and return value (AND style) refinement](#parameter_refinement)
+        * [Examples](#inheritance_examples)
 * [Validating method level constraints](#validating)
+    * [Methods for method level validation (to become 4.1.2)](#mfm)
     * [MethodConstraintViolation (to become 4.3)](#method_constraint_violation)
     * [Triggering validation](#triggering)
         * [Option 1: reuse @Valid or have a new one](#at_valid)
         * [Option 2: let each integrator use a specific annotation or propose a BV one](#specific)
-        * [Option 3: put it on the method validated (a global set of groups per method) or on a per parameter](on_method)
+        * [Option 3: put it on the method validated (a global set of groups per method) or on a per parameter](#on_method)
 * [Extensions to the meta-data API](#meta_data)
 * [Extensions to the XML schema for constraint mappings](#xml)
     * [MethodConstraintViolationException (to become 8.2)](#mcve)
@@ -38,8 +37,12 @@ author: Gunnar Morling
         * [Option 1: A class-level annotation](#class)
         * [Option 2: A property level annotation](#property)
         * [Option 3: An option in the configuration API](#option)
+* [Archive](#archive)
+    * [Alternative options for inheritance hierarchies](#inheritance_alternatives)
+        * [Option 1: Don't allow allow refinement](#no_refinement)
+        * [Option 2: allow param (OR style) and return value (AND style) refinement](#parameter_refinement)
 
-## Goal <a id="Goal"/>
+## Goal <a id="goal"/>
 
 In addition to the validation of JavaBeans, the Bean Validation API also allows to declare and validate constraints on a method level. This allows to use the Bean Validation API for a programming style known as "programming by contract". More specifically this means that any Bean Validation constraints can be used to describe
 
@@ -77,7 +80,7 @@ Example xy: Declaring parameter constraints
 			//...
 		}
 
-		public void placeOrder(@NotNull @Size(min=3, max=20) String customerCode, @NotNull Item item, @Min(1) quantity) {
+		public void placeOrder(@NotNull @Size(min=3, max=20) String customerCode, @NotNull Item item, @Min(1) int quantity) {
 			//...
 		}
 	}
@@ -250,7 +253,7 @@ Java doesn't provide a portable way to retrieve parameter names. Bean Validation
 		String[] getParameterNames(Method method) throws ValidationException;
 	}
 
-A conforming BV implementation provides a default `ParameterNameProvider` implementation which returns parameter names in the form `arg<PARAMETER_INDEX>`, where `PARAMETER_INDEX` starts at 0 for the first parameter, e.g. `arg0`, `arg1`etc.
+A conforming BV implementation provides a default `ParameterNameProvider` implementation which returns parameter names in the form `arg<PARAMETER_INDEX>`, where `PARAMETER_INDEX` starts at 0 for the first parameter, e.g. `arg0`, `arg1` etc.
 
 BV providers are free to provide additional implementations (e.g. based on annotations specifying parameter names, debug symbols etc.). If a user wishes to use another parameter name provider than the default implementation, she may specify the provider to use with help of the bootstrap API (see ...) or the XML configuration (see ...).
 
@@ -324,22 +327,81 @@ IMO introducing a new annotation doesn't really make sense, as the `@Valid` anno
 
 ### Inheritance hierarchies <a id="inheritance"/>
 
-When defining method level constraints within inheritance hierarchies (that is, class inheritance by extending base classes and interface inheritance by implementing interfaces) one generally has to deal with the [Liskov substitution principle](http://en.wikipedia.org/wiki/Liskov_substitution_principle) which mandates that
+When defining method level constraints within inheritance hierarchies (that is, class inheritance by extending base classes and interface inheritance by implementing interfaces) one has to obey the [Liskov substitution principle](http://en.wikipedia.org/wiki/Liskov_substitution_principle) which mandates that
 
-* a methods preconditions (as represented by parameter constraints) may not be strengthened in sub types
-* a methods postconditions (as represented by return value constraints) may not be weakened in sub types
+* a method's preconditions (as represented by parameter constraints) may not be strengthened in sub types
+* a method's postconditions (as represented by return value constraints) may not be weakened in sub types
 
-#### Option 1: Don't allow allow refinement <a id="no_refinement"/>
+Therefore the following rules with respect to the definition of method level constraints in inheritance hierarchies apply:
 
-#### Option 2: allow return value refinement (AND style) <a id="return_refinement"/>
+* In sub types (be it sub classes or interface implementations) no parameter constraints must be declared on overridden or implemented methods (since this would pose a strengthening of preconditions).
 
-#### Option 3: allow param (OR style) and return value (AND style) refinement <a id="parameter_refinement"/>
+* In sub types (be it sub classes or interface implementations) return value constraints may be declared on overridden or implemented methods. Upon validation, all return value constraints of the method in question are validated, wherever they are declared in the hierarchy (since this poses possibly a strengthening but no weakening of the of the method's postconditions).
+
+A conforming Bean Validation provider must throw a `ConstraintDefinitionException` when discovering that any of these rules are violated.
+
+#### Examples <a id="inheritance_examples"/>
+
+Example xy: Illegally declared parameter constraints on interface implementation
+
+	public interface OrderService {
+
+		void placeOrder(String customerCode, Item item, int quantity) { //... }
+
+	}
+
+	public class DefaultOrderService implements OrderService {
+
+		@Override
+		public void placeOrder(@NotNull @Size(min=3, max=20) String customerCode, @NotNull Item item, @Min(1) int quantity) { //... }
+
+	}
+
+The constraints in `DefaultOrderService` in example xy are illegal, as they strengthen the preconditions of `placeOrder()` as constituted by the interface `OrderService`.
+
+Example xy: Illegally declared parameter constraints on sub class
+
+	public class OrderService {
+
+		void placeOrder(String customerCode, Item item, int quantity) { //... }
+
+	}
+
+	public class DefaultOrderService extends OrderService {
+
+		@Override
+		public void placeOrder(@NotNull @Size(min=3, max=20) String customerCode, @NotNull Item item, @Min(1) int quantity) { //... }
+
+	}
+
+The constraints in `DefaultOrderService` in example xy are illegal, as they strengthen the preconditions of `placeOrder()` as constituted by the super class `OrderService`.
+
+Example xy: Correctly declared return value constraints on sub class
+
+	public class OrderService {
+
+		Order placeOrder(String customerCode, Item item, int quantity) { //... }
+
+	}
+
+	public class DefaultOrderService extends OrderService {
+
+		@Override
+		@NotNull
+		@Valid
+		public Order placeOrder(String customerCode, Item item, int quantity) { //... }
+
+	}
+
+The return value constraints in `DefaultOrderService` in example xy are legal, as they strengthen the postconditions of `placeOrder()` as constituted by the super class `OrderService` but don't weaken it.
+
+DISCUSSION: Besides the proposed approach other options include to not allow refinement at all and to allow also parameter constraint refining by OR-ing the parameter constraints. The first is unnecessary strict to me, while the latter seems somewhat undeterministic to me. I sensed some agreement on the proposal above in the discussions on the mailing list.
 
 ## Validating method level constraints <a id="validating"/>
 
 As standard bean constraints method level constraints are evaluated using the `javax.validation.Validator` API.
 
-The following new methods are suggested on `j.v.Validator` (see [GitHub](https://github.com/gunnarmorling/beanvalidation-api/blob/BVAL-244/src/main/java/javax/validation/Validator.java)): 
+The following new methods are suggested on `javax.validation.Validator` (see [GitHub](https://github.com/gunnarmorling/beanvalidation-api/blob/BVAL-244/src/main/java/javax/validation/Validator.java)): 
 
 	<T> Set<MethodConstraintViolation<T>> validateParameter(
 		T object, Method method, Object parameterValue, int parameterIndex, Class<?>... groups);
@@ -357,6 +419,8 @@ The following new methods are suggested on `j.v.Validator` (see [GitHub](https:/
 		T object, Constructor<T> constructor, Object[] parameterValues, Class<?>... groups);
 
 TODO: Add these methods to the listing in section 4.1
+
+DISCUSSION: Would a separate interface `MethodValidator` make sense? I personally don't think so, but maybe there are arguments for that.
 
 ### Methods for method level validation (to become 4.1.2) <a id="mfm"/>
 
@@ -490,6 +554,64 @@ Possible options as per Emmanuel's mail:
 
 ## Extensions to the meta-data API <a id="meta_data"/>
 
+### BeanDescriptor (5.3)
+
+The following two method should be added to `javax.validation.metadata.BeanDescriptor`:
+
+	public interface BeanDescriptor extends ElementDescriptor {
+
+		MethodDescriptor getConstraintsForMethod(String methodName, Class<?>... parameterTypes);
+
+		Set<MethodDescriptor> getConstrainedMethods();
+
+		ConstructorDescriptor getConstraintsForConstructor(Class<?>... parameterTypes);
+
+		Set<ConstructorDescriptor> getConstrainedConstructors();
+
+	}
+
+Meaning of `isBeanConstrained` should be re-defined to also return `true`, if at least one constrained method or constructor exists (having a constrained or cascaded parameter and/or return value).
+
+`getConstraintsForProperty` returns a `MethodDescriptor` describing the method level constraints of the method uniquely identified the given name and parameter types. `null` will be returned if no method with the given name and parameter types exist or if that method is not constrained (has neither parameter or return value constraints, neither return value or parameters are marked for cascaded validation).
+
+`getConstrainedMethods` returns the `MethodDescriptor`s for those of the type's methods having at least one parameter or return value constraint or at least one cascaded parameter or a cascaded return value.
+
+`getConstraintsForConstructor` returns a `ConstructorDescriptor` describing the method level constraints of the constructor uniquely identified by the given parameter types. `null` will be returned if no constructor with the given parameter types exist or if that constructor is not constrained (has neither parameter or return value constraints, neither return value or parameters are marked for cascaded validation).
+
+`getConstrainedConstructors` returns the `ConstructorDescriptor`s for those of the type's constructors having at least one parameter or return value constraint or at least one cascaded parameter or a cascaded return value.
+
+TODO: what does return value constraints/cascadation mean in the context of constructors?
+
+### MethodDescriptor (to become 5.5)
+
+The `MethodDescriptor` interface describes a constrained method of a Java type.
+
+`MethodDescriptor` lives in the `javax.validation.metadata` package.
+
+This interface is returned by BeanDescriptor.getConstraintsForMethod(String, Class<?>...) or BeanDescriptor.getConstrainedMethods.
+
+	/**
+	 * Describes a validated method.
+	 *
+	 * @author Gunnar Morling
+	 *
+	 */
+	public interface MethodDescriptor extends ElementDescriptor {
+
+		String getMethodName();
+
+		List<ParameterDescriptor> getParameterDescriptors();
+
+		boolean isCascaded();
+
+	}
+
+`getMethodName` returns the simple name of the represented method.
+
+`getParameterDescriptors` returns a list of `ParameterDescriptor`s representing the method's parameters in their natural order. An empty list will be returned in case the method has no parameters.
+
+`isCascaded` returns `true`, if the represented method's return value is marked for cascaded validation, `false` otherwise. 
+
 ## Extensions to the XML schema for constraint mappings <a id="xml"/>
 
 ## MethodConstraintViolationException (to become 8.2) <a id="mcve"/>
@@ -589,3 +711,13 @@ DISCUSSION: Might that be required/helpful by JAX-RS?
 	       .getValidator();
 
 The options don't really exclude but amend each other.
+
+## Archive <a id="archive"/>
+
+This section contains some alternative approaches for dicussed items and are temporarily here for reference.
+
+### Alternative options for inheritance hierarchies <a id="inheritance_alternatives"/>
+
+#### Option 2: allow return value refinement (AND style) <a id="return_refinement"/>
+
+#### Option 3: allow param (OR style) and return value (AND style) refinement <a id="parameter_refinement"/>
