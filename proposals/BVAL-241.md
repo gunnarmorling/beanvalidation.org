@@ -261,6 +261,8 @@ A conforming BV implementation provides a default `ParameterNameProvider` implem
 
 BV providers are free to provide additional implementations (e.g. based on annotations specifying parameter names, debug symbols etc.). If a user wishes to use another parameter name provider than the default implementation, she may specify the provider to use with help of the bootstrap API (see ...) or the XML configuration (see ...).
 
+TODO: Add options to bootstrap API and XML schema
+
 ### Defining return value constraints <a id="return_value"/>
 
 Return value constraints are defined by putting constraint annotations directly to the method itself.
@@ -294,7 +296,7 @@ DISCUSSION: Should property constraints (on getter methods) also be handled as m
 
 ### Marking parameters and return values for cascaded validation <a id="cascaded"/>
 
-Similar to normal bean validation, the `@Valid` annotation can be used, to declare that a cascaded validation of given method parameters or return values shall be performed by the Bean Validation provider.
+Similar to normal bean validation, the `@Valid` annotation can be used to declare that a cascaded validation of given method parameters or return values shall be performed by the Bean Validation provider.
 
 Generally the same rules as for standard object graph validation (see 3.5.1) apply, in particular
 
@@ -315,7 +317,7 @@ Example xy: Marking parameters and return values for cascaded validation
 		@Valid
 		public Set<Order> getOrdersByCustomer(@NotNull @Valid CustomerPK customerPk) {
 			//...
-		}		
+		}
 	}
 
 Here the following recursive validations will happen when validating the methods of the `OrderService` class:
@@ -405,7 +407,7 @@ DISCUSSION: Besides the proposed approach other options include to not allow ref
 
 As standard bean constraints method level constraints are evaluated using the `javax.validation.Validator` API.
 
-The following new methods are suggested on `javax.validation.Validator` (see [GitHub](https://github.com/gunnarmorling/beanvalidation-api/blob/BVAL-244/src/main/java/javax/validation/Validator.java)): 
+The following new methods are suggested on `javax.validation.Validator` (to be added to the listing in section 4.1): 
 
 	<T> Set<MethodConstraintViolation<T>> validateParameter(
 		T object, Method method, Object parameterValue, int parameterIndex, Class<?>... groups);
@@ -421,8 +423,6 @@ The following new methods are suggested on `javax.validation.Validator` (see [Gi
 
 	<T> Set<MethodConstraintViolation<T>> validateAllConstructorParameters(
 		T object, Constructor<T> constructor, Object[] parameterValues, Class<?>... groups);
-
-TODO: Add these methods to the listing in section 4.1
 
 DISCUSSION: Would a separate interface `MethodValidator` make sense? I personally don't think so, but maybe there are arguments for that.
 
@@ -548,13 +548,44 @@ Instead method level constraints must be validated by invoking the appropriate m
 * aspect-oriented programming
 * Java proxies
 
-Possible options as per Emmanuel's mail:
+How integrators control whether a validation of method level constraints shall be performed or not for given types is out of scope of this specification. 
 
-#### Option 1: reuse @Valid or have a new one <a id="at_valid"/>
+As it is expected though, that a very common approach will be to leverage annotations for this, the Bean Validation API defines the `javax.validation.ValidateGroups` annotation which can be used by integrators for that purpose. Integrators are encouraged to reuse this annotation instead of creating their own one.
 
-#### Option 2: let each integrator use a specific annotation or propose a BV one <a id="specific"/>
+	/**
+	 * Marker for a type or method indicating that method level constraints shall be
+	 * validated.
+	 *
+	 * @author Gunnar Morling
+	 *
+	 */
+	@Target({ ElementType.METHOD, ElementType.TYPE })
+	@Retention(RetentionPolicy.RUNTIME)
+	public @interface ValidateGroups {
 
-#### Option 3: put it on the method validated (a global set of groups per method) or on a per parameter <a id="on_method"/>
+		Class<?>[] groups() default {};
+
+		ValidationMode validationMode() default ValidationMode.ALL;
+
+		public enum ValidationMode {
+			PARAMETERS, RETURN_VALUE, ALL, NONE;
+		}
+
+	}
+
+The `ValidateGroups` annotation can be used on type as well as on method level, using the `groups` attribute the groups to be validated can be specified. Using the `validationMode` attribute it can be controlled whether only parameters, only return values or both shall be validated.
+
+DISCUSSION: IMO BV should provide an annotation as suggested above, so that integrators doen't need to create their own one. CDI requires interceptor binding annotions such as this one to be annotated with the `@InterceptorBinding` meta-annotation. But according to Pete Muir from the CDI EG this could happen programmatically by the CDI runtime so we don't have a compile-time dependency to CDI here.
+
+DISCUSSION: Is there a better name than `ValidateGroups`? IMO an adjective would be make a better annotation name. In Seam Validation it's called `@AutoValidating`.
+
+Possible other options as per Emmanuel's mail:
+
+> #### Option 1: reuse @Valid or have a new one <a id="at_valid"/>
+> 
+> #### Option 2: let each integrator use a specific annotation or propose a BV one <a id="specific"/>
+>
+> #### Option 3: put it on the method validated (a global set of groups per method) or on a per parameter <a id="on_method"/>
 
 ## Extensions to the meta-data API <a id="meta_data"/>
 
