@@ -542,7 +542,7 @@ TODO: describe behavior of getPropertyPath() (and getRootBean()) as inherited fr
 
 It's important to understand that BV itself doesn't trigger the evaluation of any method level constraints. That is, just annotating any methods with parameter or return value constraints doesn't automatically enforce these constraints, just as annotating any fields or properties with bean constraints doesn't enforce these either.
 
-Instead method level constraints must be validated by invoking the appropriate methods on `javax.validation.Validator`. This typically happens using approaches and techniques such as:
+Instead method level constraints must be validated by invoking the appropriate methods on `javax.validation.Validator`. It is expected that this usually doesn't happen by manually invoking these methods but rather automatically using approaches and techniques such as:
 
 * CDI/EJB interceptors
 * aspect-oriented programming
@@ -592,7 +592,7 @@ The `MethodDescriptor` interface describes a constrained method of a Java type.
 
 `MethodDescriptor` lives in the `javax.validation.metadata` package.
 
-This interface is returned by BeanDescriptor.getConstraintsForMethod(String, Class<?>...)` and `BeanDescriptor.getConstrainedMethods`.
+This interface is returned by `BeanDescriptor.getConstraintsForMethod(String, Class<?>...)` and `BeanDescriptor.getConstrainedMethods`.
 
 	/**
 	 * Describes a validated method.
@@ -622,7 +622,7 @@ The `ConstructorDescriptor` interface describes a constrained constructor of a J
 
 `ConstructorDescriptor` lives in the `javax.validation.metadata` package.
 
-This interface is returned by BeanDescriptor.getConstraintsForConstructor(Class<?>...)` and `BeanDescriptor.getConstrainedConstructors`.
+This interface is returned by `BeanDescriptor.getConstraintsForConstructor(Class<?>...)` and `BeanDescriptor.getConstrainedConstructors`.
 
 	/**
 	 * Describes a validated constructor.
