@@ -457,10 +457,10 @@ The following new methods are suggested on `javax.validation.Validator` (to be a
 		T object, Method method, Object returnValue, Class<?>... groups);
 
 	<T> Set<MethodConstraintViolation<T>> validateConstructorParameter(
-		T object, Constructor<T> constructor, Object parameterValue, int parameterIndex, Class<?>... groups);
+		Constructor<T> constructor, Object parameterValue, int parameterIndex, Class<?>... groups);
 
 	<T> Set<MethodConstraintViolation<T>> validateAllConstructorParameters(
-		T object, Constructor<T> constructor, Object[] parameterValues, Class<?>... groups);
+		Constructor<T> constructor, Object[] parameterValues, Class<?>... groups);
 
 *DISCUSSION: Would a separate interface `MethodValidator` make sense? I personally don't think so, but maybe there are arguments for that.*
 
@@ -470,14 +470,75 @@ The method `<T> Set<MethodConstraintViolation<T>> validateParameter(T object, Me
 
 The method `<T> Set<MethodConstraintViolation<T>> validateAllParameters(T object, Method method, Object[] parameterValues, Class<?>... groups);` validates the arguments (as given in `parameterValues`) for the parameters of a given method (identified by `method`). A `Set` containing all `MethodConstraintViolation` objects representing the failing constraints is returned, an empty `Set` is returned otherwise.
 
-The method `<T> Set<MethodConstraintViolation<T>> validateConstructorParameter(T object, Constructor<T> constructor, Object parameterValue, int parameterIndex, Class<?>... groups);` validates the value (identified by `parameterValue`) for a single method parameter (identified by `constructor` and `parameterIndex`). A `Set` containing all `MethodConstraintViolation` objects representing the failing constraints is returned, an empty `Set` is returned otherwise.
+The method `<T> Set<MethodConstraintViolation<T>> validateConstructorParameter(Constructor<T> constructor, Object parameterValue, int parameterIndex, Class<?>... groups);` validates the value (identified by `parameterValue`) for a single method parameter (identified by `constructor` and `parameterIndex`). A `Set` containing all `MethodConstraintViolation` objects representing the failing constraints is returned, an empty `Set` is returned otherwise.
 
-The method `<T> Set<MethodConstraintViolation<T>> validateAllConstructorParameters(T object, Constructor<T> constructor, Object[] parameterValues, Class<?>... groups);` validates the arguments (as given in `parameterValues`) for the parameters of a given constructor (identified by `constructor`). A `Set` containing all `MethodConstraintViolation` objects representing the failing constraints is returned, an empty `Set` is returned otherwise.
+The method `<T> Set<MethodConstraintViolation<T>> validateAllConstructorParameters(Constructor<T> constructor, Object[] parameterValues, Class<?>... groups);` validates the arguments (as given in `parameterValues`) for the parameters of a given constructor (identified by `constructor`). A `Set` containing all `MethodConstraintViolation` objects representing the failing constraints is returned, an empty `Set` is returned otherwise.
 
 The method `<T> Set<MethodConstraintViolation<T>> validateReturnValue(T object, Method method, Object returnValue, Class<?>... groups);` validates the return value (specified by `returnValue`) of a given method (identified by `method`). A `Set` containing all `MethodConstraintViolation` objects representing the failing constraints is returned, an empty `Set` is returned otherwise.
 
+TODO: What's the root bean in case of constructor parameter validation? The object isn't created yet.
 
 #### Examples
+
+All the examples will be based on the following class definitions, constraint declarations and instances.
+
+	public class OrderService {
+
+		public OrderService(@NotNull CreditCardProcessor creditCardProcessor) {
+			//...
+		}
+
+		@NotNull
+		public Order placeOrder(@NotNull @Size(min=3, max=20) String customerCode, @NotNull @Valid Item item, @Min(1) int quantity) {
+			//...
+		}
+	}
+
+	public class Item {
+
+		@NotNull;
+		private String name;
+
+		public String getName() { return name; }
+		public void setName(String name) { this.name = name; }
+	}
+
+	Item item1 = new Item();
+	item1.setName("Kiwi");
+
+	Item item2 = new Item();
+	item2.setName(null);
+
+	Constructor<OrderService> constructor = ... ; //get constructor object
+	Method<OrderService> placeOrder = ... ; //get method object
+
+	OrderService orderService = new OrderService(new DefaultCreditCardProcessor());
+
+The following method parameter validation will return one `MethodConstraintViolation` object as the customer code is `null`.
+
+	//orderService.placeOrder(null, item1, 1);
+	validator.validateAllParameters(orderService, placeOrder, new Object[] { null, item1, 1 }).size() == 1;
+
+The following method parameter validation will return no `MethodConstraintViolation` object as the customer code is `null` but the quantity parameter is validated.
+
+	//orderService.placeOrder(null, item1, 1);
+	validator.validateParameter(orderService, placeOrder, new Object[] { null, item1, 1 }, 2).size() == 0;
+
+The following method parameter validation will return one `MethodConstraintViolation` object as the item is not valid (its name is `null`).
+
+	//orderService.placeOrder("CUST-123", item2, 1);
+	validator.validateAllParameters(orderService, placeOrder, new Object[] { "CUST-123", item2, 1 }).size() == 1;
+
+The following constructor parameter validation will return one `MethodConstraintViolation` as `null` is passed for the credit card processor parameter.
+
+	//new OrderService(null);
+	validator.validateAllConstructorParameters(constructor, new Object[] { null }).size() == 1;
+
+Assuming the `placeOrder` method returned `null`, the following return value validation will return one `MethodConstraintViolation`:
+
+	validator.validateAllParameters(orderService, placeOrder, null).size() == 1;
+
+TODO: More examples to follow. Define semantics of constructor validation.
 
 ### MethodConstraintViolation (to become 4.3) <a id="method_constraint_violation"/>
 
