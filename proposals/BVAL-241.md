@@ -241,6 +241,47 @@ Parameter names would be retrieved via the `ParameterNameProvider` (see next sec
 
 Probably basic constraints (`@NotNull` etc.) should be checked beforehand in order to allow for concise script expressions without redundant null checks.
 
+##### Option 4b: Script based asserts next to parameters
+
+	public class ReservationService {
+
+		void bookHotel(
+			@NotNull Customer customer,
+			@NotNull Date from,
+			@NotNull @Assert(script="_param.after(arg1)", lang="javascript") Date to) {
+			//...
+		}
+	}
+
+* Pro: Script is given where it is used as constraint
+* Con: Reads bad for longer expressions?
+* Con: Asymmetric to class-level constraints
+
+##### Option 5: Have parametrized interfaces `MethodConstraintValidatorN` for N method parameters:
+
+	public interface MethodConstraintValidator3<A extends Annotation, T1, T2, T3> {
+
+		void initialize(A constraintAnnotation);
+
+		boolean isValid(T1 parameter1, T2 parameter2, T3 parameter3, ConstraintValidatorContext context);
+	}
+
+	public class DateParameterCheckValidator implements MethodConstraintValidator3<DateParameterCheck, Customer, Date, Date> {
+
+		@Override
+		public void initialize(DateParameterCheck constraint) {}
+
+		public boolean isValid(Customer customer, Date from, Date to, ConstraintValidatorContext context) {
+			if(from == null || to == null) {
+				return true;
+			}
+			return from.before(to);
+		}
+	}
+
+* Pro: type safe
+* Con: doesn't scale well, feels akward
+
 #### Naming parameters <a id="naming"/>
 
 If the validation of a parameter constraint fails the concerned parameter needs to be identified in the resulting `MethodConstraintViolation` (see ...).
