@@ -648,15 +648,18 @@ As it is expected though, that a very common approach will be to leverage annota
 
 Using the `groups` attribute the groups to be validated can be specified. Using the `validationMode` attribute it can be controlled whether only parameters, only return values or both shall be validated.
 
-*DISCUSSION: The `ValidateGroups` annotation can be used on type as well as on method or parameter level, with parameter having precedence over method and type level, and method having precedence over type level. That way a default configuration can be given on the type level (e.g. to validate only parameter constraints), while another configuration can be chosen for single methods (e.g. turn off validation by using `ValidationMode.NONE).*
-
-*DISCUSSION: IMO BV should provide an annotation as suggested above, so that integrators doen't need to create their own one. CDI requires interceptor binding annotions such as this one to be annotated with the `@InterceptorBinding` meta-annotation. But according to Pete Muir from the CDI EG this could happen programmatically by the CDI runtime so we don't have a compile-time dependency to CDI here.*
+*DISCUSSION: The `ValidateGroups` annotation can be used on type as well as on method or parameter level, with parameter having precedence over method and type level, and method having precedence over type level. That way a default configuration can be given on the type level (e.g. to validate only parameter constraints), while another configuration can be chosen for single methods (e.g. turn off validation by using `ValidationMode.NONE`).*
 
 *DISCUSSION: Is there a better name than `ValidateGroups`? IMO an adjective would be make a better annotation name. In Seam Validation it's called `@AutoValidating`.*
 
-*DISCUSSION: Possible other options:*
+*DISCUSSION: General options for triggering validation:*
+
 ** reuse @Valid*
 ** let each integrator use a specific annotation*
+** specify a standardized one in BV (see proposal above)*
+
+*IMO BV should provide an annotation as suggested above, so that integrators doen't need to create their own one. CDI requires interceptor binding annotions such as this one to be annotated with the `@InterceptorBinding` meta-annotation. But according to Pete Muir from the CDI EG this could happen programmatically by the CDI runtime so we don't have a compile-time dependency to CDI here.*
+
 
 ## Extensions to the meta-data API <a id="meta_data"/>
 
