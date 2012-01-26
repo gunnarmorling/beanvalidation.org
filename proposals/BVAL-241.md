@@ -654,9 +654,9 @@ Using the `groups` attribute the groups to be validated can be specified. Using 
 
 *DISCUSSION: General options for triggering validation:*
 
-** reuse @Valid*
-** let each integrator use a specific annotation*
-** specify a standardized one in BV (see proposal above)*
+* *reuse @Valid*
+* *let each integrator use a specific annotation*
+* *specify a standardized one in BV (see proposal above)*
 
 *IMO BV should provide an annotation as suggested above, so that integrators doen't need to create their own one. CDI requires interceptor binding annotions such as this one to be annotated with the `@InterceptorBinding` meta-annotation. But according to Pete Muir from the CDI EG this could happen programmatically by the CDI runtime so we don't have a compile-time dependency to CDI here.*
 
