@@ -47,14 +47,18 @@ author: Gunnar Morling
 
 ## Goal <a id="goal"/>
 
-In addition to the validation of JavaBeans, the Bean Validation API also allows to declare and validate constraints on a method level. This allows to use the Bean Validation API for a programming style known as "programming by contract". More specifically this means that any Bean Validation constraints can be used to describe
+As of version 1.1, the Bean Validation API can not only be used for the validation of invariants applying to JavaBeans, but also to validate constraints applying to the parameters and return values of methods of arbitrary Java types. 
 
-* the preconditions that must be met before a method may legally be invoked and
-* postconditions that are guaranteed after a method invocation returns.
+That means that the Bean Validation API can be used to describe and validate the contract applying to a given method, that is
+
+* the preconditions that must be met by the method caller before the method may be invoked and
+* the postconditions that are guaranteed to the caller after a method invocation returns.
+
+This allows to use the Bean Validation API for a programming style known as "Programming by Contract" (PbC). Note that it is *not* the goal of this specification to develop a fully-fledged PbC solution but rather an easy-to-use facility to fulfill the most common needs related to applying constraints to method parameters and return values based on the proven concepts of the Bean Validation API.
 
 Compared to traditional means of checking the sanity of a method's argument values (within the method implementation) and its return value (by the caller after invoking the method) this approach has several advantages:
 
-* These checks don't have to be performed manually, which results in less code to write and maintain.
+* These checks are expressed declaratively and don't have to be performed manually, which results in less code to write, read and maintain.
 * The pre- and postconditions applying for a method don't have to be expressed again in the method's JavaDoc, since any of it's annotations will automatically be included in the generated JavaDoc. This means less redundancy which reduces the chance of inconsistencies between implementation and comments.
 
 ## Declaring method level constraints (to become 3.5?) <a id="method_level"/>
