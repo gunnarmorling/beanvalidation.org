@@ -378,11 +378,13 @@ When defining method level constraints within inheritance hierarchies (that is, 
 * a method's preconditions (as represented by parameter constraints) may not be strengthened in sub types
 * a method's postconditions (as represented by return value constraints) may not be weakened in sub types
 
+TODO: Add a box explaining the rationale behind the Liskov substitution principle
+
 Therefore the following rules with respect to the definition of method level constraints in inheritance hierarchies apply:
 
-* In sub types (be it sub classes or interface implementations) no parameter constraints must be declared on overridden or implemented methods (since this would pose a strengthening of preconditions).
+* In sub types (be it sub classes or interface implementations) no parameter constraints must be declared on overridden or implemented methods (since this would pose a strengthening of preconditions to be fulfilled by the caller).
 
-* In sub types (be it sub classes or interface implementations) return value constraints may be declared on overridden or implemented methods. Upon validation, all return value constraints of the method in question are validated, wherever they are declared in the hierarchy (since this poses possibly a strengthening but no weakening of the of the method's postconditions).
+* In sub types (be it sub classes or interface implementations) return value constraints may be declared on overridden or implemented methods. Upon validation, all return value constraints of the method in question are validated, wherever they are declared in the hierarchy (since this only poses possibly a strengthening but no weakening of the method's postconditions guaranteed to the caller).
 
 A conforming Bean Validation provider must throw a `ConstraintDefinitionException` when discovering that any of these rules are violated.
 
@@ -646,11 +648,13 @@ As it is expected though, that a very common approach will be to leverage annota
 
 	}
 
-Using the `groups` attribute the groups to be validated can be specified. Using the `validationMode` attribute it can be controlled whether only parameters, only return values or both shall be validated.
+Using the `groups` attribute the groups to be validated can be specified. If no value is given, implicitely the group `javax.validation.groups.Default` will be validated. Using the `validationMode` attribute it can be controlled whether only parameters, only return values or both shall be validated.
 
-*DISCUSSION: The `ValidateGroups` annotation can be used on type as well as on method or parameter level, with parameter having precedence over method and type level, and method having precedence over type level. That way a default configuration can be given on the type level (e.g. to validate only parameter constraints), while another configuration can be chosen for single methods (e.g. turn off validation by using `ValidationMode.NONE`).*
+The `ValidateGroups` annotation can be specified on type as well as on method level. It is left to integrators how to handle situations where the annotation is given on a type *and* a method of the same. It is recommended though to give method level annotations precedence, effectively allowing a default configuration to be given on the class level which can be overridden on the method level (e.g. to turn off validation for single methods by using `ValidationMode.NONE`).
 
-*DISCUSSION: Is there a better name than `ValidateGroups`? IMO an adjective would be make a better annotation name. In Seam Validation it's called `@AutoValidating`.*
+It is left to integrators how to handle situations where the annotation is given on several types (be it classes or interfaces) within an inheritance hierarchy.
+
+*DISCUSSION: A better name is to be found. Some proposals from the list: `@Guarded`, `@ValidateMethods`, `@ValidateOnMethodCall`, `@AutoValidating`, `@AutoValidated`, `@ValidateMethodCall`. IMO an adjective would be make a better annotation name.*
 
 *DISCUSSION: General options for triggering validation:*
 
@@ -659,7 +663,6 @@ Using the `groups` attribute the groups to be validated can be specified. Using 
 * *specify a standardized one in BV (see proposal above)*
 
 *IMO BV should provide an annotation as suggested above, so that integrators doen't need to create their own one. CDI requires interceptor binding annotions such as this one to be annotated with the `@InterceptorBinding` meta-annotation. But according to Pete Muir from the CDI EG this could happen programmatically by the CDI runtime so we don't have a compile-time dependency to CDI here.*
-
 
 ## Extensions to the meta-data API <a id="meta_data"/>
 
