@@ -447,8 +447,6 @@ Example xy: Correctly declared return value constraints on sub class
 
 The return value constraints in `DefaultOrderService` in example xy are legal, as they strengthen the postconditions of `placeOrder()` as constituted by the super class `OrderService` but don't weaken it.
 
-*DISCUSSION: Besides the proposed approach other options include to not allow refinement at all and to allow also parameter constraint refining by OR-ing the parameter constraints. The first is unnecessary strict to me, while the latter seems somewhat undeterministic to me. I sensed some agreement on the proposal above in the discussions on the mailing list.*
-
 ## Validating method level constraints <a id="validating"></a>
 
 As standard bean constraints method level constraints are evaluated using the `javax.validation.Validator` API.
@@ -838,6 +836,8 @@ Bean Validation provides a reference exception for such cases. Frameworks and ap
 
 ## Misc. <a id="misc"></a>
 
+This section contains some issues which might be added to the proposal if there is demand for them.
+
 ### Validating invariants <a id="invariants"></a>
 
 *DISCUSSION: Should there be some way to trigger validation of bean constraints upon method invocations?*
@@ -881,6 +881,8 @@ The options don't really exclude but amend each other.
 This section contains some alternative approaches for dicussed items and are temporarily here for reference.
 
 ### Alternative options for inheritance hierarchies <a id="inheritance_alternatives"></a>
+
+*DISCUSSION: Besides the proposed approach other options exist (see below). The first is unnecessary strict to me, while the latter seems somewhat undeterministic to me. I sensed some agreement on the proposal above in the discussions on the mailing list.*
 
 #### Option 2: allow return value refinement (AND style) <a id="return_refinement"></a>
 
